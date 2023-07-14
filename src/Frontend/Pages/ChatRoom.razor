@@ -1,0 +1,164 @@
+﻿@page "/chatroom"
+@inject NavigationManager navigationManager
+
+<PageTitle>Chat Session@_topic</PageTitle>
+
+<h1>Chat Session</h1>
+
+@if (!_isChatting)
+{
+    <p>
+        Waiting for connection...
+    </p>
+}
+else
+{
+
+    <div class="alert alert-secondary mt-4" role="alert">
+        <span class="oi oi-person mr-2" aria-hidden="true"></span>
+        <span>You are connected</span>
+    </div>
+    <div id="scrollbox">
+        @foreach (var item in _messages)
+        {
+            @if (item.IsNotice)
+            {
+                <div class="alert alert-info">@item.Body</div>
+            }
+            else
+            {
+                <div class="@item.CSS">
+                    <div class="user">@item.Username</div>
+                    <div class="msg">@item.Body</div>
+                    <button class="btn btn-sm btn-default" @onclick="(() => Translate(item.Body))">Translate</button>
+                    @if (!string.IsNullOrWhiteSpace(item.Transliteration))
+                    {
+                        <div class="msg">@item.Transliteration</div>
+                    }
+                </div>
+            }
+        }
+        <hr />
+        <textarea class="input-lg" placeholder="enter your comment" @bind="@_newMessage" @onkeydown="HandleKeyDown"></textarea>
+        <button class="btn btn-default" @onclick="@(() => SendAsync(_newMessage))">Send</button>
+    </div>
+}
+@code {
+    private string _topic = string.Empty;
+    private bool _isChatting = false;
+
+    private int _sessionId = 11;
+
+    // name of the user who will be chatting
+    private string _username = "Me";
+
+    // on-screen message
+    private string _message;
+
+    // new message input
+    private string _newMessage;
+
+    // list of messages in chat
+    private List<Message> _messages = new List<Message>();
+
+    private async Task Translate(string content)
+    {
+        var response = await _apiClient.PostAsJsonAsync("/chat/translate", new TranslationRequest { Sentence = content });
+        response.EnsureSuccessStatusCode();
+        var data = await response.Content.ReadAsStringAsync();
+
+        Console.WriteLine(data);
+    }
+
+    private async Task SendAsync(string message)
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            var messageModel = new Message("ken", message, true);
+            _messages.Add(messageModel);
+            _newMessage = string.Empty;
+
+            try
+            {
+                var response = await _apiClient.PostAsJsonAsync("/chat/chat", new AskRequest { SessionId = _sessionId, Input = message });
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var data = await response.Content.ReadFromJsonAsync<AskResult>();
+
+                    _messages.Last().Transliteration = data.Transliteration;
+                    _messages.Add(new Message("bot", data.Result, false));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
+        }
+    }
+
+    private HttpClient _apiClient;
+
+    public ChatRoom()
+    {
+        _apiClient = new HttpClient();
+        _apiClient.BaseAddress = new Uri("https://localhost:7071");
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendAsync(_newMessage);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await _apiClient.PostAsJsonAsync("/chat/chat", new AskRequest { SessionId = _sessionId, Input = "hello" } );
+        response.EnsureSuccessStatusCode();
+        var content = await response.Content.ReadFromJsonAsync<AskResult>();
+        if (content != null)
+        {
+            _messages.Add(new Message("bot", content.Result, false));
+            _isChatting = true;
+        }
+    }
+
+    private class TranslationRequest
+    {
+        public string Sentence { get; set; } = string.Empty;
+    }
+
+    private class AskRequest
+    {
+        public int SessionId { get; set; }
+        public string Input { get; set; } = string.Empty;
+    }
+
+    private class AskResult
+    {
+        public int SessionId { get; set; }
+        public string Result { get; set; } = string.Empty;
+        public string Transliteration { get; set; } = string.Empty;
+    }
+
+    private class Message
+    {
+        public Message(string username, string body, bool mine)
+        {
+            Username = username;
+            Body = body;
+            Mine = mine;
+        }
+
+        public string Transliteration { get; set; }
+        public string Username { get; set; }
+        public string Body { get; set; }
+        public bool Mine { get; set; }
+
+        public bool IsNotice => Body.StartsWith("[Notice]");
+
+        public string CSS => Mine ? "sent" : "received";
+    }
+}
