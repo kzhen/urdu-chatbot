@@ -1,3 +1,4 @@
+using Backend.Configuration;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.AI.ChatCompletion;
 
@@ -9,6 +10,7 @@ namespace Backend
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            builder.Services.AddHttpClient();
 
             builder.Services.AddCors(options =>
             {
@@ -29,6 +31,8 @@ namespace Backend
             builder.Services.AddSwaggerGen();
 
             builder.Services.AddSemanticKernelServices(builder.Configuration);
+            builder.Services.AddOptions<AzureSpeechOptions>()
+                .Bind(builder.Configuration.GetSection(AzureSpeechOptions.PropertyName));
 
             
             

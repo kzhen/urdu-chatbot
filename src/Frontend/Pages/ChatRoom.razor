@@ -1,5 +1,7 @@
 ﻿@page "/chatroom"
+@using Frontend.Services
 @inject NavigationManager navigationManager
+@inject IJSRuntime jsRuntime
 
 <PageTitle>Chat Session@_topic</PageTitle>
 
@@ -35,6 +37,7 @@ else
                     {
                         <div class="msg">@item.Transliteration</div>
                     }
+                    <button @onclick="@(() => PlaySpeech(item))">Speak</button>
                 </div>
             }
         }
@@ -42,6 +45,8 @@ else
         <textarea class="input-lg" placeholder="enter your comment" @bind="@_newMessage" @onkeydown="HandleKeyDown"></textarea>
         <button class="btn btn-default" @onclick="@(() => SendAsync(_newMessage))">Send</button>
     </div>
+
+    <audio controls ref="@audioPlayerRef" style="display: none;"></audio>
 }
 @code {
     private string _topic = string.Empty;
@@ -60,6 +65,14 @@ else
 
     // list of messages in chat
     private List<Message> _messages = new List<Message>();
+
+    private ElementReference audioPlayerRef;
+
+    private async Task PlaySpeech(Message message)
+    {
+        await jsRuntime.InvokeAsync<object>("azureSpeechInterop.createSpeechSynthesizer");
+        await jsRuntime.InvokeAsync<string>("azureSpeechInterop.speak", message.Body);
+    }
 
     private async Task Translate(string content)
     {
